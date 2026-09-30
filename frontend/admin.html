@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AttendTrax – Admin Dashboard</title>
+  <meta name="description" content="Admin dashboard for AttendTrax – manage classes, students, faculty, and attendance data." />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>" />
+  <style>
+    .sidebar { background: linear-gradient(180deg, #1e1b4b 0%, #312e81 50%, #4f46e5 100%); }
+    .role-admin { background: #fef3c7; color: #92400e; }
+
+    /* Tab pills */
+    .tab-pills { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .tab-pill {
+      padding: 0.45rem 1rem;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border: 1.5px solid var(--gray-200);
+      background: #fff;
+      color: var(--gray-500);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .tab-pill.active {
+      background: linear-gradient(135deg, var(--indigo-600), var(--brand-600));
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 2px 8px rgb(79 70 229 / 0.3);
+    }
+
+    /* Action bar */
+    .action-bar { display: flex; justify-content: flex-end; margin-bottom: 1rem; }
+
+    /* Admin sub-tabs */
+    .admin-tab { display: none; }
+    .admin-tab.active { display: block; animation: fadeSection 0.2s ease; }
+
+    /* Import zone */
+    #drop-zone input[type=file] { display: none; }
+  </style>
+</head>
+<body>
+<div id="toast-container"></div>
+<div id="page-loader" class="page-loader">
+  <div class="loader-ring"></div>
+  <p class="text-muted">Loading…</p>
+</div>
+
+<!-- Confirm Modal -->
+<div id="confirm-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3 id="confirm-title" style="margin-bottom:0.75rem;">Confirm Action</h3>
+    <p id="confirm-msg" style="color:var(--gray-600);margin-bottom:1.5rem;"></p>
+    <div class="flex gap-4 justify-between">
+      <button class="btn btn-secondary" id="confirm-cancel">Cancel</button>
+      <button class="btn btn-danger"    id="confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Generic Form Modal -->
+<div id="form-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3 id="modal-title" style="margin-bottom:1.25rem;"></h3>
+    <div id="modal-body"></div>
+    <div class="flex gap-4 justify-between" style="margin-top:1.5rem;">
+      <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
+      <button class="btn btn-primary"   id="modal-submit">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="app-layout">
+  <!-- ══════════════════ SIDEBAR ══════════════════ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-name">🎓 AttendTrax</div>
+      <div class="brand-sub">Admin Control Panel</div>
+    </div>
+    <div class="sidebar-user">
+      <div class="user-name" id="sidebar-name">—</div>
+      <span class="user-role role-admin">Admin</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active" data-section="classes">
+        <span class="nav-icon">🏫</span> Classes
+      </div>
+      <div class="nav-item" data-section="students">
+        <span class="nav-icon">🧑‍🎓</span> Students
+      </div>
+      <div class="nav-item" data-section="faculty">
+        <span class="nav-icon">👨‍🏫</span> Faculty
+      </div>
+      <div class="nav-item" data-section="subjects">
+        <span class="nav-icon">📚</span> Subjects
+      </div>
+      <div class="nav-item" data-section="reports">
+        <span class="nav-icon">📊</span> Reports
+      </div>
+      <div class="nav-item" data-section="import">
+        <span class="nav-icon">📥</span> Import Data
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="logout-btn" id="logout-btn">🚪 Logout</button>
+    </div>
+  </aside>
+
+  <!-- ══════════════════ MAIN ══════════════════ -->
+  <div class="main-content">
+    <header class="topbar">
+      <div class="flex items-center gap-4">
+        <button class="menu-toggle" id="menu-toggle">☰</button>
+        <span class="topbar-title" id="section-title">Classes</span>
+      </div>
+      <span class="topbar-date" id="topbar-date"></span>
+    </header>
+
+    <main class="page-content">
+
+      <!-- ═══════════ CLASSES ═══════════ -->
+      <section class="section active" id="section-classes">
+        <div class="action-bar">
+          <button class="btn btn-primary" id="add-class-btn">➕ Add Class</button>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr><th>Class ID</th><th>Class Name</th><th>Year</th><th>Section</th><th>Semester</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="classes-tbody">
+                  <tr><td colspan="7" class="text-center text-muted" style="padding:2rem;">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════ STUDENTS ═══════════ -->
+      <section class="section" id="section-students">
+        <div class="flex items-center gap-4" style="margin-bottom:1rem;flex-wrap:wrap;">
+          <div class="form-group" style="flex:1;min-width:200px;">
+            <label class="form-label">Filter by Class</label>
+            <select id="student-class-filter" class="form-control">
+              <option value="">— All Classes —</option>
+            </select>
+          </div>
+          <div style="align-self:flex-end;">
+            <button class="btn btn-primary" id="add-student-btn">➕ Add Student</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr><th>Reg No</th><th>Name</th><th>Class</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="students-tbody-admin">
+                  <tr><td colspan="5" class="text-center text-muted" style="padding:2rem;">Select a class to view students.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════ FACULTY ═══════════ -->
+      <section class="section" id="section-faculty">
+        <div class="action-bar">
+          <button class="btn btn-primary" id="add-faculty-btn">➕ Add Faculty</button>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr><th>User ID</th><th>Name</th><th>Username</th><th>Role</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="faculty-tbody">
+                  <tr><td colspan="5" class="text-center text-muted" style="padding:2rem;">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════ SUBJECTS ═══════════ -->
+      <section class="section" id="section-subjects">
+        <div class="flex items-center gap-4" style="margin-bottom:1rem;flex-wrap:wrap;">
+          <div class="form-group" style="flex:1;min-width:200px;">
+            <label class="form-label">Select Class</label>
+            <select id="subject-class-filter" class="form-control">
+              <option value="">— Select Class —</option>
+            </select>
+          </div>
+          <div style="align-self:flex-end;">
+            <button class="btn btn-primary" id="add-subject-btn">➕ Add Subject</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr><th>Subject ID</th><th>Subject Name</th><th>Class</th><th>Faculty ID</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="subjects-tbody">
+                  <tr><td colspan="5" class="text-center text-muted" style="padding:2rem;">Select a class to view subjects.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════ REPORTS ═══════════ -->
+      <section class="section" id="section-reports">
+        <div class="card" style="margin-bottom:1.5rem;">
+          <div class="card-body">
+            <div class="flex items-center gap-4" style="flex-wrap:wrap;">
+              <div class="form-group" style="flex:1;min-width:200px;">
+                <label class="form-label">Class</label>
+                <select id="report-class-filter" class="form-control">
+                  <option value="">— Select Class —</option>
+                </select>
+              </div>
+              <div style="align-self:flex-end;">
+                <button class="btn btn-primary" id="load-report-btn">Generate Report</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="report-result" class="hidden">
+          <div class="card">
+            <div class="card-header">
+              <h3 id="report-title">Attendance Report</h3>
+              <button class="btn btn-secondary btn-sm" id="export-csv-btn">📤 Export CSV</button>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr><th>Reg No</th><th>Name</th><th>Total Hours</th><th>Attended</th><th>Absent</th><th>Attendance %</th></tr>
+                  </thead>
+                  <tbody id="report-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════ IMPORT ═══════════ -->
+      <section class="section" id="section-import">
+        <div class="card" style="max-width:600px;margin:0 auto;">
+          <div class="card-header"><h3>📥 Import Past Attendance</h3></div>
+          <div class="card-body">
+            <p class="text-sm text-muted" style="margin-bottom:1.25rem;">
+              Upload an <strong>.xlsx</strong> file with columns:
+              <span class="tag">Date</span>
+              <span class="tag">ClassID</span>
+              <span class="tag">Hour</span>
+              <span class="tag">SubjectID</span>
+              <span class="tag">RegNo</span>
+              <span class="tag">Status</span>
+              <span class="tag">FacultyID</span>
+              (optional)
+            </p>
+            <p class="text-xs text-muted" style="margin-bottom:1rem;">
+              Date format: <code>DD-MM-YYYY</code> &nbsp;|&nbsp; Hour: <code>H1</code>–<code>H8</code> &nbsp;|&nbsp; Status: <code>P</code>, <code>A</code>, or <code>-</code>
+            </p>
+
+            <div class="drop-zone" id="drop-zone">
+              <div class="drop-icon">📄</div>
+              <p class="font-semibold" style="margin-bottom:0.25rem;">Drop your .xlsx file here</p>
+              <p class="text-sm text-muted">or click to browse</p>
+              <input type="file" id="import-file" accept=".xlsx" />
+            </div>
+
+            <div id="file-chosen" class="hidden" style="margin-top:0.75rem;padding:0.75rem;background:var(--brand-50);border-radius:8px;display:flex;align-items:center;gap:0.5rem;">
+              <span>📄</span>
+              <span id="file-name" class="text-sm font-semibold"></span>
+              <button class="btn btn-sm btn-secondary" id="clear-file-btn" style="margin-left:auto;">✕ Clear</button>
+            </div>
+
+            <div id="import-result" class="hidden" style="margin-top:1rem;padding:1rem;border-radius:8px;"></div>
+
+            <button class="btn btn-primary w-full" id="upload-btn" style="margin-top:1.25rem;" disabled>
+              <span id="upload-btn-text">📤 Upload & Import</span>
+            </button>
+
+            <div style="margin-top:1.5rem;border-top:1px solid var(--gray-100);padding-top:1.25rem;">
+              <h4 style="margin-bottom:0.75rem;">📋 Download Template</h4>
+              <p class="text-sm text-muted" style="margin-bottom:0.75rem;">Download a sample Excel template to fill in your past attendance data.</p>
+              <button class="btn btn-secondary" id="download-template-btn">⬇️ Download Template (.xlsx)</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<script src="api.js"></script>
+<script>
+if (!requireAuth('ADMIN')) { /* redirected */ }
+
+document.getElementById('sidebar-name').textContent = getName() || '—';
+document.getElementById('topbar-date').textContent   = todayDisplay();
+
+// ── Section nav ─────────────────────────────────────────────────────────────
+const sectionLoaders = {
+  classes:  loadClasses,
+  students: () => populateStudentClassFilter(),
+  faculty:  loadFaculty,
+  subjects: () => populateSubjectClassFilter(),
+  reports:  () => populateReportClassFilter(),
+  import:   () => {},
+};
+const secTitles = { classes:'Classes', students:'Students', faculty:'Faculty', subjects:'Subjects', reports:'Reports', import:'Import Past Attendance' };
+
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const sec = item.dataset.section;
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById(`section-${sec}`).classList.add('active');
+    document.getElementById('section-title').textContent = secTitles[sec] || sec;
+    document.getElementById('sidebar').classList.remove('open');
+    if (sectionLoaders[sec]) sectionLoaders[sec]();
+  });
+});
+
+document.getElementById('menu-toggle').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('open');
+});
+document.getElementById('logout-btn').addEventListener('click', () => {
+  clearAuth(); window.location.href = 'index.html';
+});
+
+// ── Confirm modal ────────────────────────────────────────────────────────────
+let _confirmResolve = null;
+function openConfirm(title, msg) {
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-msg').textContent   = msg;
+  document.getElementById('confirm-modal').classList.remove('hidden');
+  return new Promise(res => { _confirmResolve = res; });
+}
+document.getElementById('confirm-cancel').addEventListener('click', () => {
+  document.getElementById('confirm-modal').classList.add('hidden');
+  if (_confirmResolve) _confirmResolve(false);
+});
+document.getElementById('confirm-ok').addEventListener('click', () => {
+  document.getElementById('confirm-modal').classList.add('hidden');
+  if (_confirmResolve) _confirmResolve(true);
+});
+
+// ── Form modal ───────────────────────────────────────────────────────────────
+let _formResolve = null;
+function openFormModal(title, bodyHtml) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML    = bodyHtml;
+  document.getElementById('form-modal').classList.remove('hidden');
+  return new Promise(res => { _formResolve = res; });
+}
+document.getElementById('modal-cancel').addEventListener('click', () => {
+  document.getElementById('form-modal').classList.add('hidden');
+  if (_formResolve) _formResolve(null);
+});
+document.getElementById('modal-submit').addEventListener('click', () => {
+  document.getElementById('form-modal').classList.add('hidden');
+  const inputs  = document.querySelectorAll('#modal-body [data-field]');
+  const result  = {};
+  inputs.forEach(el => { result[el.dataset.field] = el.value.trim(); });
+  if (_formResolve) _formResolve(result);
+});
+
+// ════════════════════════════════════════════════════════════════
+//  CLASSES
+// ════════════════════════════════════════════════════════════════
+let allClasses = [];
+async function loadClasses() {
+  showLoader(true);
+  try {
+    allClasses = await api.get('/admin/classes');
+    renderClasses(allClasses);
+  } catch(e) { showToast(e.message,'error'); }
+  finally { showLoader(false); }
+}
+
+function renderClasses(classes) {
+  const tbody = document.getElementById('classes-tbody');
+  tbody.innerHTML = '';
+  if (!classes.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:2rem;">No classes found.</td></tr>';
+    return;
+  }
+  classes.forEach(c => {
+    tbody.innerHTML += `
+      <tr>
+        <td><span class="tag">${c.ClassID}</span></td>
+        <td class="font-semibold">${c.ClassName}</td>
+        <td>${c.Year || '—'}</td>
+        <td>${c.Section || '—'}</td>
+        <td>${c.Semester || '—'}</td>
+        <td><span class="badge ${c.Status==='ACTIVE'?'badge-info':'badge-absent'}">${c.Status}</span></td>
+        <td>
+          <div class="flex gap-2">
+            <button class="btn btn-sm btn-secondary rename-class-btn" data-id="${c.ClassID}" data-name="${c.ClassName}">✏️ Rename</button>
+            <button class="btn btn-sm btn-danger deactivate-class-btn" data-id="${c.ClassID}">🗑️</button>
+          </div>
+        </td>
+      </tr>`;
+  });
+  // Bind rename
+  document.querySelectorAll('.rename-class-btn').forEach(btn => btn.addEventListener('click', renameClass));
+  document.querySelectorAll('.deactivate-class-btn').forEach(btn => btn.addEventListener('click', deactivateClass));
+}
+
+document.getElementById('add-class-btn').addEventListener('click', async () => {
+  const result = await openFormModal('➕ Add New Class', `
+    <div class="form-stack" style="gap:1rem;">
+      <div class="form-group"><label class="form-label">Class ID</label><input data-field="class_id" class="form-control" placeholder="e.g. CSE3A" /></div>
+      <div class="form-group"><label class="form-label">Class Name</label><input data-field="class_name" class="form-control" placeholder="e.g. CSE III Year A" /></div>
+      <div class="form-group"><label class="form-label">Year</label><input data-field="year" class="form-control" placeholder="e.g. 3" /></div>
+      <div class="form-group"><label class="form-label">Section</label><input data-field="section" class="form-control" placeholder="e.g. A" /></div>
+      <div class="form-group"><label class="form-label">Semester</label><input data-field="semester" class="form-control" placeholder="e.g. 5" /></div>
+    </div>`);
+  if (!result || !result.class_id || !result.class_name) return;
+  showLoader(true);
+  try {
+    await api.post('/admin/classes', result);
+    showToast('Class added successfully!', 'success');
+    loadClasses();
+  } catch(e) { showToast(e.message,'error'); }
+  finally { showLoader(false); }
+});
+
+async function renameClass(e) {
+  const id   = e.currentTarget.dataset.id;
+  const name = e.currentTarget.dataset.name;
+  const result = await openFormModal('✏️ Rename Class', `
+    <div class="form-group">
+      <label class="form-label">New Class Name</label>
+      <input data-field="new_name" class="form-control" value="${name}" />
+    </div>`);
+  if (!result?.new_name) return;
+  showLoader(true);
+  try {
+    await api.patch(`/admin/classes/${id}/rename`, { new_name: result.new_name });
+    showToast('Class renamed.','success');
+    loadClasses();
+  } catch(e) { showToast(e.message,'error'); }
+  finally { showLoader(false); }
+}
+
+async function deactivateClass(e) {
+  const id = e.currentTarget.dataset.id;
+  const ok = await openConfirm('Deactivate Class', `Are you sure you want to deactivate class "${id}"? This will hide it from the system.`);
+  if (!ok) return;
+  showLoader(true);
+  try {
+    await api.delete(`/admin/classes/${id}`);
+    showToast('Class deactivated.','success');
+    loadClasses();
+  } catch(e) { showToast(e.message,'error'); }
+  finally { showLoader(false); }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  STUDENTS
+// ════════════════════════════════════════════════════════════════
+async function populateStudentClassFilter() {
+  const sel = document.getElementById('student-class-filter');
+  if (sel.options.length > 1) return;
+  const classes = await api.get('/admin/classes').catch(() => []);
+  classes.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.ClassID; o.textContent = c.ClassName;
+    sel.appendChild(o);
+  });
+}
+
+document.getElementById('student-class-filter').addEventListener('change', async function() {
+  const classId = this.value;
+  const tbody = document.getElementById('students-tbody-admin');
+  if (!classId) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:2rem;">Select a class.</td></tr>'; return; }
+  showLoader(true);
+  try {
+    const students = await api.get(`/admin/classes/${classId}/students`);
+    tbody.innerHTML = '';
+    students.forEach(s => {
+      tbody.innerHTML += `
+        <tr>
+          <td><span class="tag">${s.RegNo}</span></td>
+          <td class="font-semibold">${s.Name}</td>
+          <td>${s.ClassName}</td>
+          <td><span class="badge ${s.Status==='ACTIVE'?'badge-info':'badge-absent'}">${s.Status}</span></td>
+          <td>
+            <button class="btn btn-sm btn-danger deactivate-student-btn" data-reg="${s.RegNo}" data-name="${s.Name}">🗑️ Remove</button>
+          </td>
+        </tr>`;
+    });
+    document.querySelectorAll('.deactivate-student-btn').forEach(btn => btn.addEventListener('click', deactivateStudent));
+  } catch(e) { showToast(e.message,'error'); }
+  finally { showLoader(false); }
+});
+
+document.getElementById('add-student-btn').addEventListener('click', async () => {
+  const classId = document.getElementById('student-class-filter').value;
+  const classes = allClasses.length ? allClasses : await api.get('/admin/classes').catch(() => []);
+  const opts = classes.map(c => `<option value="${c.ClassID}" ${c.ClassID===classId?'selected':''}>${c.ClassName}</option>`).join('');
+  const result = await openFormModal('➕ Add Student', `
+    <div class="form-stack" style="gap:1rem;">
+      <div class="form-group"><label class="form-label">Reg No</label><input data-field="reg_no" class="form-control" placeholder="e.g. 23CS001" /></div>
+      <div class="form-group"><label class="form-label">Full Name</label><input data-field="name" class="form-control" placeholder="Student full name" /></div>
+      <div class="form-group"><label class="form-label">Class</label><select data-field="class_id" class="form-control"><option value="">— Select —</option>${opts}</select></div>
+      <div class="form-group"><label class="form-label">Login Username (optional, defaults to Reg No)</label><input data-field="username" class="form-control" placeholder="Leave blank to use Reg No" /></div>
+      <div class="form-group"><label class="form-label">Login Password (optional, defaults to Reg No)</label><input data-field="password" class="form-control" type="password" placeholder="Leave blank to use Reg No" /></div>
+    </div>`);
+  if (!result?.reg_no || !result?.name || !result?.class_id) return;
+  showLoader(true);
+  try {
+    await api.post('/admin/students', result);
+    showToast(`Student '${result.name}' added!`,'success');
+    document.getElementById('student-class-filter').dispatchEvent(new Event('change'));
+  } catch(e) { showToast(e.message,'error'); }
+  finally { showLoader(false); }
+});
+
+async function deactivateStudent(e) {
+  const reg  = e.currentTarget.dataset.reg;
+  const name = e.currentTarget.dataset.name;
+  const ok = await openConfirm('Remove Student', `Remove ${name} (${reg}) from the active roster?`);
+  if (!ok) return;
+  showLoader(true);
+  try {
+    await api.delete(`/admin/students/${reg}`);
+    showToast('Student deactivated.','success');
+    document.getElementById('student-class-filter').dispatchEvent(new Event('change'));
+  } catch(e) { showToast(e.message,'error'); }
+  finally { showLoader(false); }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  FACULTY
+// ════════════════════════════════════════════════════════════════
+async function loadFaculty() {
+  showLoader(true);
+  try {
+    // Reuse users from backend – we don't have a dedicated faculty list endpoint
+    // but we can get class report for all; for user management use admin/users concept
+    // For now: faculty/classes to confirm connection; then show hint
+    const classes = await api.get('/admin/classes');
+    document.getElementById('faculty-tbody').innerHTML = `
+      <tr><td colspan="5" class="text-center text-muted" style="padding:2rem;">
+        Faculty accounts are managed through the Users sheet in Google Sheets. Use the ➕ Add Faculty button to add new ones.
+      </td></tr>`;
+  } catch(e) { showToast(e.message,'error'); }
+  finally { showLoader(false); }
+}
+
+document.getElementById('add-faculty-btn').addEventListener('click', async () => {
+  const result = await openFormModal('➕ Add Faculty Account', `
+    <div class="form-stack" style="gap:1rem;">
+      <div class="form-group"><label class="form-label">Faculty ID</label><input data-field="faculty_id" class="form-control" placeholder="e.g. FAC001" /></div>
+      <div class="form-group"><label class="form-label">Full Name</label><input data-field="name" class="form-control" placeholder="Faculty full name" /></div>
+      <div class="form-group"><label class="form-label">Username</label><input data-field="username" class="form-control" placeholder="Login username" /></div>
+      <div class="form-group"><label class="form-label">Password</label><input data-field="password" class="form-control" type="password" placeholder="Login password" /></div>
+    </div>`);
+  if (!result?.faculty_id || !result?.name || !result?.username || !result?.password) {
+    showToast('All fields are required.','warning'); return;
+  }
+  showLoader(true);
+  try {
+    await api.post('/admin/faculty', result);
+    showToast(`Faculty '${result.name}' added!`,'success');
+  } catch(e) { showToast(e.message,'error'); }
+  finally { showLoader(false); }
+});
+
+// ════════════════════════════════════════════════════════════════
+//  SUBJECTS
+// ════════════════════════════════════════════════════════════════
+async function populateSubjectClassFilter() {
+  const sel = document.getElementById('subject-class-filter');
+  if (sel.options.length > 1) return;
+  const classes = allClasses.length ? allClasses : await api.get('/admin/classes').catch(() => []);
+  classes.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.ClassID; o.textContent = c.ClassName;
+    sel.appendChild(o);
+  });
+}
+
+document.getElementById('subject-class-filter').addEventListener('change', async function() {
+  const classId = this.value;
+  const tbody = document.getElementById('subjects-tbody');
+  if (!classId) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:2rem;">Select a class.</td></tr>'; return; }
+  showLoader(true);
+  try {
+    const subs = await api.get(`/admin/classes/${classId}/subjects`);
+    tbody.innerHTML = '';
+    subs.forEach(s => {
+      tbody.innerHTML += `
+        <tr>
+          <td><span class="tag">${s.SubjectID}</span></td>
+          <td class="font-semibold">${s.SubjectName}</td>
+          <td>${s.ClassID}</td>
+          <td>${s.FacultyID || '—'}</td>
+          <td>
+            <button class="btn btn-sm btn-danger del-subject-btn" data-id="${s.SubjectID}" data-name="${s.SubjectName}">🗑️ Remove</button>
+          </td>
+        </tr>`;
+    });
+    if (!subs.length) tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:2rem;">No subjects yet.</td></tr>';
+    document.querySelectorAll('.del-subject-btn').forEach(btn => btn.addEventListener('click', deleteSubject));
+  } catch(e) { showToast(e.message,'error'); }
+  finally { showLoader(false); }
+});
+
+document.getElementById('add-subject-btn').addEventListener('click', async () => {
+  const classId = document.getElementById('subject-class-filter').value;
+  if (!classId) { showToast('Select a class first.','warning'); return; }
+  const result = await openFormModal('➕ Add Subject', `
+    <div class="form-stack" style="gap:1rem;">
+      <div class="form-group"><label class="form-label">Subject ID</label><input data-field="subject_id" class="form-control" placeholder="e.g. CS301" /></div>
+      <div class="form-group"><label class="form-label">Subject Name</label><input data-field="subject_name" class="form-control" placeholder="e.g. Data Structures" /></div>
+      <div class="form-group"><label class="form-label">Faculty ID (optional)</label><input data-field="faculty_id" class="form-control" placeholder="e.g. FAC001" /></div>
+    </div>`);
+  if (!result?.subject_id || !result?.subject_name) return;
+  result.class_id = classId;
+  showLoader(true);
+  try {
+    await api.post('/admin/subjects', result);
+    showToast('Subject added!','success');
+    document.getElementById('subject-class-filter').dispatchEvent(new Event('change'));
+  } catch(e) { showToast(e.message,'error'); }
+  finally { showLoader(false); }
+});
+
+async function deleteSubject(e) {
+  const id   = e.currentTarget.dataset.id;
+  const name = e.currentTarget.dataset.name;
+  const ok = await openConfirm('Remove Subject', `Remove subject "${name}" (${id})?`);
+  if (!ok) return;
+  showLoader(true);
+  try {
+    await api.delete(`/admin/subjects/${id}`);
+    showToast('Subject removed.','success');
+    document.getElementById('subject-class-filter').dispatchEvent(new Event('change'));
+  } catch(e) { showToast(e.message,'error'); }
+  finally { showLoader(false); }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  REPORTS
+// ════════════════════════════════════════════════════════════════
+let reportData = [];
+async function populateReportClassFilter() {
+  const sel = document.getElementById('report-class-filter');
+  if (sel.options.length > 1) return;
+  const classes = allClasses.length ? allClasses : await api.get('/admin/classes').catch(() => []);
+  classes.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.ClassID; o.textContent = c.ClassName;
+    sel.appendChild(o);
+  });
+}
+
+document.getElementById('load-report-btn').addEventListener('click', async () => {
+  const classId = document.getElementById('report-class-filter').value;
+  if (!classId) { showToast('Select a class.','warning'); return; }
+  showLoader(true);
+  try {
+    reportData = await api.get(`/admin/reports/class/${classId}`);
+    const cls  = allClasses.find(c => c.ClassID === classId);
+    document.getElementById('report-title').textContent = `Attendance – ${cls?.ClassName || classId}`;
+    renderReport(reportData);
+    document.getElementById('report-result').classList.remove('hidden');
+  } catch(e) { showToast(e.message,'error'); }
+  finally { showLoader(false); }
+});
+
+function renderReport(data) {
+  const tbody = document.getElementById('report-tbody');
+  tbody.innerHTML = '';
+  data.forEach(r => {
+    const pct = r.percentage;
+    const barCls  = pct>=75?'progress-good':pct>=60?'progress-warn':'progress-danger';
+    const badgeCls= pct>=75?'badge-info':pct>=60?'badge-warning':'badge-absent';
+    tbody.innerHTML += `
+      <tr>
+        <td>${r.reg_no}</td>
+        <td class="font-semibold">${r.name}</td>
+        <td>${r.total}</td>
+        <td>${r.attended}</td>
+        <td>${r.total - r.attended}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div class="progress-bar-wrap" style="width:80px;"><div class="progress-bar ${barCls}" style="width:${pct}%"></div></div>
+            <span class="badge ${badgeCls}">${pct}%</span>
+          </div>
+        </td>
+      </tr>`;
+  });
+}
+
+// CSV export
+document.getElementById('export-csv-btn').addEventListener('click', () => {
+  if (!reportData.length) { showToast('No data to export.','warning'); return; }
+  const header = 'Reg No,Name,Total Hours,Attended,Absent,Percentage\n';
+  const rows   = reportData.map(r => `${r.reg_no},${r.name},${r.total},${r.attended},${r.total-r.attended},${r.percentage}%`).join('\n');
+  const blob   = new Blob([header + rows], { type: 'text/csv' });
+  const url    = URL.createObjectURL(blob);
+  const a      = document.createElement('a');
+  a.href = url; a.download = 'attendance_report.csv'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+// ════════════════════════════════════════════════════════════════
+//  IMPORT
+// ════════════════════════════════════════════════════════════════
+const dropZone  = document.getElementById('drop-zone');
+const fileInput = document.getElementById('import-file');
+let importFile  = null;
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragging'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragging');
+  const f = e.dataTransfer.files[0];
+  if (f?.name.endsWith('.xlsx')) setImportFile(f);
+  else showToast('Please drop a .xlsx file.','warning');
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) setImportFile(e.target.files[0]); });
+
+function setImportFile(f) {
+  importFile = f;
+  document.getElementById('file-name').textContent = f.name;
+  document.getElementById('file-chosen').classList.remove('hidden');
+  document.getElementById('upload-btn').disabled = false;
+  document.getElementById('import-result').classList.add('hidden');
+}
+
+document.getElementById('clear-file-btn').addEventListener('click', () => {
+  importFile = null;
+  fileInput.value = '';
+  document.getElementById('file-chosen').classList.add('hidden');
+  document.getElementById('upload-btn').disabled = true;
+  document.getElementById('import-result').classList.add('hidden');
+});
+
+document.getElementById('upload-btn').addEventListener('click', async () => {
+  if (!importFile) return;
+  const btn     = document.getElementById('upload-btn');
+  const btnText = document.getElementById('upload-btn-text');
+  btn.disabled  = true;
+  btnText.innerHTML = '<span class="spinner"></span> Importing…';
+  const resultEl = document.getElementById('import-result');
+
+  const formData = new FormData();
+  formData.append('file', importFile);
+
+  try {
+    const res = await api.upload('/admin/import/attendance', formData);
+    resultEl.style.background = '#d1fae5';
+    resultEl.innerHTML = `
+      <p style="color:#065f46;font-weight:700;margin-bottom:0.5rem;">✅ Import Successful!</p>
+      <p class="text-sm">${res.message}</p>
+      <div class="flex gap-4" style="margin-top:0.5rem;">
+        <span class="badge badge-info">Total rows: ${res.total_rows}</span>
+        <span class="badge badge-info">Inserted: ${res.inserted}</span>
+        <span class="badge badge-warning">Skipped: ${res.skipped}</span>
+      </div>`;
+    resultEl.classList.remove('hidden');
+  } catch(e) {
+    resultEl.style.background = '#fee2e2';
+    resultEl.innerHTML = `<p style="color:#991b1b;font-weight:700;">❌ Import Failed</p><p class="text-sm">${e.message}</p>`;
+    resultEl.classList.remove('hidden');
+  } finally {
+    btn.disabled  = false;
+    btnText.textContent = '📤 Upload & Import';
+  }
+});
+
+// Template download (simple CSV instructions)
+document.getElementById('download-template-btn').addEventListener('click', () => {
+  const header = 'Date,ClassID,Hour,SubjectID,RegNo,Status,FacultyID\n';
+  const sample = '29-09-2026,CSE3A,H1,CS301,23CS001,P,FAC001\n29-09-2026,CSE3A,H1,CS301,23CS002,A,FAC001\n';
+  const blob   = new Blob([header + sample], { type: 'text/csv' });
+  const url    = URL.createObjectURL(blob);
+  const a      = document.createElement('a');
+  a.href = url; a.download = 'attendance_import_template.csv'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('Template downloaded! Open it in Excel and save as .xlsx before uploading.','info', 5000);
+});
+
+// Initial load
+loadClasses();
+</script>
+</body>
+</html>
