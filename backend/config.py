@@ -17,6 +17,15 @@ class Settings(BaseSettings):
     SUBJECTS_SHEET_ID: str = ""              # Spreadsheet ID for Subjects sheet
     ATTENDANCE_LOG_SHEET_ID: str = ""        # Spreadsheet ID for Attendance_Log
 
+    # ── Hardcoded Admin Credentials ───────────────────────────────────────
+    # Change these values to secure credentials before going to production.
+    # ADMIN_PASSWORD_HASH is a bcrypt hash of the plain-text password.
+    # To regenerate: python -c "from passlib.context import CryptContext; print(CryptContext(schemes=['bcrypt']).hash('your_password'))"
+    ADMIN_USERNAME: str = "admin"
+    # Default password: AttendTrax@2026  (change this or override in .env!)
+    ADMIN_PASSWORD_HASH: str = "$2b$12$hJ13qK5FuQEklbE9aBIdtOTTNVZo6DFe5yE86KVaf5lQDe1zlyzGi"
+    ADMIN_NAME: str = "System Administrator"
+
     # ── Auth ──────────────────────────────────────────────────────────────
     SECRET_KEY: str = "CHANGE_ME_IN_PRODUCTION_PLEASE"
     ALGORITHM: str = "HS256"

@@ -5,7 +5,7 @@ import io
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File, status
 from pydantic import BaseModel
 
 import sheets
@@ -133,6 +133,22 @@ async def deactivate_student(reg_no: str, _=_admin_dep):
     return {"message": "Student deactivated."}
 
 
+@router.post("/cache/refresh")
+async def refresh_cache(_=_admin_dep):
+    """
+    Force-clears the in-memory read cache so the next request fetches
+    fresh data from Google Sheets. Useful after manually editing the sheet.
+    """
+    sheets._cache_invalidate(
+        "all_classes_raw",
+        "all_students_raw",
+        "all_subjects_raw",
+        "all_users",
+    )
+    return {"message": "Cache cleared. Next read will fetch fresh data from Google Sheets."}
+
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # FACULTY ACCOUNTS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -141,6 +157,21 @@ class AddFacultyRequest(BaseModel):
     name: str
     username: str
     password: str
+
+
+@router.get("/faculty")
+async def list_faculty(_=_admin_dep):
+    users = sheets.get_all_users()
+    # Filter for FACULTY role and return safe fields
+    return [
+        {
+            "FacultyID": u.get("UserID", ""),
+            "Name": u.get("Name", ""),
+            "Username": u.get("Username", ""),
+            "Role": u.get("Role", "")
+        }
+        for u in users if u.get("Role", "").upper() == "FACULTY"
+    ]
 
 
 @router.post("/faculty")
@@ -246,4 +277,290 @@ async def import_attendance(file: UploadFile = File(...), _=Depends(require_role
         "total_rows": len(rows),
         "inserted": inserted,
         "skipped": len(rows) - inserted,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BULK IMPORT – STUDENTS  (Excel upload)
+# ─────────────────────────────────────────────────────────────────────────────
+@router.post("/import/students")
+async def import_students(
+    file: UploadFile = File(...),
+    class_id: str = Form(...),           # selected from UI dropdown, NOT in Excel
+    _=Depends(require_role("ADMIN")),
+):
+    """
+    Upload an .xlsx file with two columns:
+        col 1 – register number  ("register no" / "reg no" / "regno" / "roll no")
+        col 2 – student name     ("student name" / "name")
+
+    class_id  – passed as a form field (chosen from dropdown in the UI).
+    username  – automatically set to the student's full name.
+    password  – automatically set to the register number.
+
+    Duplicate register numbers are silently skipped.
+    """
+    import openpyxl
+
+    if not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Only .xlsx files are supported.")
+
+    if not class_id.strip():
+        raise HTTPException(status_code=400, detail="Please select a class before uploading.")
+
+    class_id   = class_id.strip()
+    cls        = sheets.get_class_by_id(class_id)
+    class_name = cls["ClassName"] if cls else class_id
+
+    contents = await file.read()
+    wb   = openpyxl.load_workbook(io.BytesIO(contents), data_only=True)
+    ws_xl = wb.active
+
+    raw_headers = [str(c.value).strip() if c.value else "" for c in next(ws_xl.iter_rows(max_row=1))]
+
+    def _find_col(candidates, raw):
+        """Case-insensitive, space/underscore-agnostic column finder."""
+        norm = lambda s: s.lower().replace(" ", "").replace("_", "").replace(".", "")
+        norm_raw = [norm(h) for h in raw]
+        for c in candidates:
+            if norm(c) in norm_raw:
+                return norm_raw.index(norm(c))
+        return -1
+
+    reg_col  = _find_col(
+        ["registerno", "regno", "reg", "rollno", "rollnumber", "registernum", "regnum"],
+        raw_headers,
+    )
+    name_col = _find_col(
+        ["studentname", "name", "fullname", "studentfullname", "sname"],
+        raw_headers,
+    )
+
+    if reg_col == -1:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                'Column "Register No" not found. '
+                'Accepted header names: "register no", "reg no", "regno", "roll no".'
+            ),
+        )
+    if name_col == -1:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                'Column "Student Name" not found. '
+                'Accepted header names: "student name", "name", "full name".'
+            ),
+        )
+
+    # Existing reg nos → for duplicate detection
+    existing_regnos = {
+        str(s.get("RegNo", "")).strip().lower()
+        for s in sheets.get_all_students()
+    }
+
+    inserted, skipped, errors = 0, 0, []
+
+    for row_num, row in enumerate(ws_xl.iter_rows(min_row=2, values_only=True), start=2):
+        reg_no = str(row[reg_col]).strip()  if row[reg_col]  is not None else ""
+        name   = str(row[name_col]).strip() if row[name_col] is not None else ""
+
+        if not reg_no and not name:
+            continue          # completely blank row
+
+        if not reg_no:
+            errors.append(f"Row {row_num}: Register number is empty.")
+            continue
+        if not name:
+            errors.append(f"Row {row_num}: Student name is empty (reg: {reg_no}).")
+            continue
+
+        if reg_no.lower() in existing_regnos:
+            skipped += 1
+            continue
+
+        try:
+            sheets.add_student({
+                "reg_no":     reg_no,
+                "name":       name,
+                "class_id":   class_id,
+                "class_name": class_name,
+            })
+            sheets.create_user({
+                "user_id":       reg_no,
+                "name":          name,
+                "username":      name,        # username = student name
+                "password_hash": hash_password(reg_no),  # password = register no
+                "role":          "STUDENT",
+                "class_id":      class_id,
+            })
+            existing_regnos.add(reg_no.lower())
+            inserted += 1
+        except Exception as ex:
+            errors.append(f"Row {row_num} ({reg_no}): {str(ex)}")
+
+    if errors:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": f"{inserted} added, {skipped} skipped. Errors found:",
+                "errors":  errors[:20],
+            },
+        )
+
+    return {
+        "message":  f"Import complete. {inserted} student(s) added to '{class_name}', {skipped} already existed.",
+        "inserted": inserted,
+        "skipped":  skipped,
+        "class":    class_name,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BULK IMPORT – FACULTY  (Excel upload)
+# ─────────────────────────────────────────────────────────────────────────────
+@router.post("/import/faculty")
+async def import_faculty(file: UploadFile = File(...), _=Depends(require_role("ADMIN"))):
+    """
+    Upload an .xlsx file to bulk-add faculty accounts.
+
+    Required columns:  FacultyID | Name | Username | Password
+    """
+    import openpyxl
+
+    if not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Only .xlsx files are supported.")
+
+    contents = await file.read()
+    wb = openpyxl.load_workbook(io.BytesIO(contents), data_only=True)
+    ws_xl = wb.active
+
+    headers = [str(c.value).strip() if c.value else "" for c in next(ws_xl.iter_rows(max_row=1))]
+    required = {"FacultyID", "Name", "Username", "Password"}
+    missing = required - set(headers)
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing columns: {', '.join(missing)}. Required: FacultyID, Name, Username, Password",
+        )
+
+    idx = {h: i for i, h in enumerate(headers)}
+
+    # Existing usernames to detect duplicates
+    existing_users = sheets.get_all_users()
+    existing_usernames = {str(u.get("Username", "")).strip().lower() for u in existing_users}
+
+    inserted, skipped, errors = 0, 0, []
+    for row_num, row in enumerate(ws_xl.iter_rows(min_row=2, values_only=True), start=2):
+        rd = {h: (str(row[i]).strip() if row[i] is not None else "") for h, i in idx.items()}
+        if not any(rd.values()):
+            continue
+
+        faculty_id = rd.get("FacultyID", "").strip()
+        name       = rd.get("Name", "").strip()
+        username   = rd.get("Username", "").strip()
+        password   = rd.get("Password", "").strip()
+
+        if not faculty_id or not name or not username or not password:
+            errors.append(f"Row {row_num}: All four columns (FacultyID, Name, Username, Password) are required.")
+            continue
+
+        if username.lower() in existing_usernames:
+            skipped += 1
+            continue
+
+        try:
+            sheets.create_user({
+                "user_id": faculty_id,
+                "name": name,
+                "username": username,
+                "password_hash": hash_password(password),
+                "role": "FACULTY",
+                "class_id": "",
+            })
+            existing_usernames.add(username.lower())
+            inserted += 1
+        except Exception as ex:
+            errors.append(f"Row {row_num} ({username}): {str(ex)}")
+
+    if errors:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": f"{inserted} inserted, {skipped} skipped. Errors found:", "errors": errors[:20]},
+        )
+
+    return {
+        "message": f"Faculty import complete. {inserted} added, {skipped} skipped (username already exists).",
+        "inserted": inserted,
+        "skipped": skipped,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BULK IMPORT – SUBJECTS  (Excel upload)
+# ─────────────────────────────────────────────────────────────────────────────
+@router.post("/import/subjects")
+async def import_subjects(file: UploadFile = File(...), _=Depends(require_role("ADMIN"))):
+    """
+    Upload an .xlsx file to bulk-add subjects.
+
+    Required columns:  SubjectID | SubjectName | ClassID
+    Optional columns:  FacultyID
+    """
+    import openpyxl
+
+    if not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Only .xlsx files are supported.")
+
+    contents = await file.read()
+    wb = openpyxl.load_workbook(io.BytesIO(contents), data_only=True)
+    ws_xl = wb.active
+
+    headers = [str(c.value).strip() if c.value else "" for c in next(ws_xl.iter_rows(max_row=1))]
+    required = {"SubjectID", "SubjectName", "ClassID"}
+    missing = required - set(headers)
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing columns: {', '.join(missing)}. Required: SubjectID, SubjectName, ClassID. Optional: FacultyID",
+        )
+
+    idx = {h: i for i, h in enumerate(headers)}
+
+    inserted, skipped, errors = 0, 0, []
+    for row_num, row in enumerate(ws_xl.iter_rows(min_row=2, values_only=True), start=2):
+        rd = {h: (str(row[i]).strip() if row[i] is not None else "") for h, i in idx.items()}
+        if not any(rd.values()):
+            continue
+
+        subject_id   = rd.get("SubjectID", "").strip()
+        subject_name = rd.get("SubjectName", "").strip()
+        class_id     = rd.get("ClassID", "").strip()
+        faculty_id   = rd.get("FacultyID", "").strip()
+
+        if not subject_id or not subject_name or not class_id:
+            errors.append(f"Row {row_num}: SubjectID, SubjectName, and ClassID are required.")
+            continue
+
+        try:
+            sheets.add_subject({
+                "subject_id": subject_id,
+                "class_id": class_id,
+                "subject_name": subject_name,
+                "faculty_id": faculty_id,
+            })
+            inserted += 1
+        except Exception as ex:
+            errors.append(f"Row {row_num} ({subject_id}): {str(ex)}")
+
+    if errors:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": f"{inserted} inserted. Errors found:", "errors": errors[:20]},
+        )
+
+    return {
+        "message": f"Subjects import complete. {inserted} subjects added.",
+        "inserted": inserted,
+        "skipped": skipped,
     }

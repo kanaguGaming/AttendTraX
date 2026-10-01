@@ -2,7 +2,7 @@
 # sheets.py  –  Google Sheets helper layer
 # All direct gspread / Google API calls live here.
 # =============================================================================
-import json, os, re
+import json, os, re, time
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
@@ -11,6 +11,31 @@ from google.oauth2.service_account import Credentials
 from gspread.exceptions import APIError, WorksheetNotFound
 
 from config import get_settings
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Simple TTL in-memory cache  (avoids hammering Sheets API / hitting 429)
+# ─────────────────────────────────────────────────────────────────────────────
+_CACHE: Dict[str, tuple] = {}   # key -> (value, expires_at)
+
+
+def _cache_get(key: str):
+    """Return cached value if still valid, else None."""
+    entry = _CACHE.get(key)
+    if entry and time.monotonic() < entry[1]:
+        return entry[0]
+    return None
+
+
+def _cache_set(key: str, value, ttl: float = 60.0):
+    """Store value with a TTL (seconds)."""
+    _CACHE[key] = (value, time.monotonic() + ttl)
+
+
+def _cache_invalidate(*keys: str):
+    """Delete one or more cache entries (call after any write)."""
+    for k in keys:
+        _CACHE.pop(k, None)
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -75,9 +100,14 @@ def _col_letter(n: int) -> str:
 # USERS
 # ─────────────────────────────────────────────────────────────────────────────
 def get_all_users() -> List[Dict]:
-    """Return all rows from the Users sheet."""
+    """Return all rows from the Users sheet (cached 60 s)."""
+    cached = _cache_get("all_users")
+    if cached is not None:
+        return cached
     ws = _open_by_id(get_settings().USERS_SHEET_ID).worksheet("Users")
-    return ws.get_all_records()
+    data = ws.get_all_records()
+    _cache_set("all_users", data, ttl=60)
+    return data
 
 
 def get_user_by_username(username: str) -> Optional[Dict]:
@@ -99,6 +129,7 @@ def create_user(user_data: Dict) -> None:
         user_data["role"],
         user_data.get("class_id", ""),
     ])
+    _cache_invalidate("all_users")
 
 
 def update_user_password(username: str, new_hash: str) -> None:
@@ -106,10 +137,10 @@ def update_user_password(username: str, new_hash: str) -> None:
     records = ws.get_all_records()
     for i, row in enumerate(records, start=2):   # row 1 = header
         if str(row.get("Username", "")).strip().lower() == username.lower():
-            # Find the PasswordHash column index
             headers = ws.row_values(1)
             col = headers.index("PasswordHash") + 1
             ws.update_cell(i, col, new_hash)
+            _cache_invalidate("all_users")
             return
 
 
@@ -119,20 +150,32 @@ def delete_user(username: str) -> None:
     for i, row in enumerate(records, start=2):
         if str(row.get("Username", "")).strip().lower() == username.lower():
             ws.delete_rows(i)
+            _cache_invalidate("all_users")
             return
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CLASSES
 # ─────────────────────────────────────────────────────────────────────────────
-def get_all_classes() -> List[Dict]:
+def _get_all_classes_raw() -> List[Dict]:
+    """Fetch ALL class rows (active + inactive) from Sheets, cached 60 s."""
+    cached = _cache_get("all_classes_raw")
+    if cached is not None:
+        return cached
     ws = _open_by_id(get_settings().CLASSES_SHEET_ID).worksheet("Classes")
-    return [r for r in ws.get_all_records() if r.get("Status", "").upper() == "ACTIVE"]
+    data = ws.get_all_records()
+    _cache_set("all_classes_raw", data, ttl=60)
+    return data
+
+
+def get_all_classes() -> List[Dict]:
+    """Return active classes only (served from cache)."""
+    return [r for r in _get_all_classes_raw() if r.get("Status", "").upper() != "INACTIVE"]
 
 
 def get_class_by_id(class_id: str) -> Optional[Dict]:
-    ws = _open_by_id(get_settings().CLASSES_SHEET_ID).worksheet("Classes")
-    for r in ws.get_all_records():
+    """Lookup a class by ID (served from cache)."""
+    for r in _get_all_classes_raw():
         if str(r.get("ClassID", "")).strip() == class_id.strip():
             return r
     return None
@@ -148,6 +191,7 @@ def add_class(data: Dict) -> None:
         data.get("semester", ""),
         "ACTIVE",
     ])
+    _cache_invalidate("all_classes_raw")
 
 
 def update_class_name(class_id: str, new_name: str) -> None:
@@ -158,6 +202,7 @@ def update_class_name(class_id: str, new_name: str) -> None:
     for i, row in enumerate(records, start=2):
         if str(row.get("ClassID", "")).strip() == class_id.strip():
             ws.update_cell(i, name_col, new_name)
+            _cache_invalidate("all_classes_raw")
             return
 
 
@@ -169,18 +214,30 @@ def deactivate_class(class_id: str) -> None:
     for i, row in enumerate(records, start=2):
         if str(row.get("ClassID", "")).strip() == class_id.strip():
             ws.update_cell(i, status_col, "INACTIVE")
+            _cache_invalidate("all_classes_raw")
             return
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SUBJECTS
 # ─────────────────────────────────────────────────────────────────────────────
-def get_subjects_for_class(class_id: str) -> List[Dict]:
+def _get_all_subjects_raw() -> List[Dict]:
+    """Fetch ALL subject rows, cached 60 s."""
+    cached = _cache_get("all_subjects_raw")
+    if cached is not None:
+        return cached
     ws = _open_by_id(get_settings().SUBJECTS_SHEET_ID).worksheet("Subjects")
+    data = ws.get_all_records()
+    _cache_set("all_subjects_raw", data, ttl=60)
+    return data
+
+
+def get_subjects_for_class(class_id: str) -> List[Dict]:
+    """Return active subjects for a class (served from cache)."""
     return [
-        r for r in ws.get_all_records()
+        r for r in _get_all_subjects_raw()
         if str(r.get("ClassID", "")).strip() == class_id.strip()
-        and r.get("Status", "").upper() == "ACTIVE"
+        and r.get("Status", "").upper() != "INACTIVE"
     ]
 
 
@@ -193,6 +250,7 @@ def add_subject(data: Dict) -> None:
         data.get("faculty_id", ""),
         "ACTIVE",
     ])
+    _cache_invalidate("all_subjects_raw")
 
 
 def delete_subject(subject_id: str) -> None:
@@ -203,24 +261,41 @@ def delete_subject(subject_id: str) -> None:
     for i, row in enumerate(records, start=2):
         if str(row.get("SubjectID", "")).strip() == subject_id.strip():
             ws.update_cell(i, status_col, "INACTIVE")
+            _cache_invalidate("all_subjects_raw")
             return
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STUDENTS
 # ─────────────────────────────────────────────────────────────────────────────
-def get_students_by_class(class_id: str) -> List[Dict]:
+def _get_all_students_raw() -> List[Dict]:
+    """Fetch ALL student rows (active + inactive), cached 60 s."""
+    cached = _cache_get("all_students_raw")
+    if cached is not None:
+        return cached
     ws = _open_by_id(get_settings().STUDENTS_SHEET_ID).worksheet("Students")
+    data = ws.get_all_records()
+    _cache_set("all_students_raw", data, ttl=60)
+    return data
+
+
+def get_students_by_class(class_id: str) -> List[Dict]:
+    """Return active students for a class (served from cache)."""
     return [
-        r for r in ws.get_all_records()
+        r for r in _get_all_students_raw()
         if str(r.get("ClassID", "")).strip() == class_id.strip()
-        and r.get("Status", "").upper() == "ACTIVE"
+        and r.get("Status", "").upper() != "INACTIVE"
     ]
 
 
+def get_all_students() -> List[Dict]:
+    """Return all rows from the Students sheet (cached)."""
+    return _get_all_students_raw()
+
+
 def get_student_by_regnum(reg_num: str) -> Optional[Dict]:
-    ws = _open_by_id(get_settings().STUDENTS_SHEET_ID).worksheet("Students")
-    for r in ws.get_all_records():
+    """Lookup a student by Reg No (served from cache)."""
+    for r in _get_all_students_raw():
         if str(r.get("RegNo", "")).strip() == reg_num.strip():
             return r
     return None
@@ -235,6 +310,7 @@ def add_student(data: Dict) -> None:
         data.get("class_name", ""),
         "ACTIVE",
     ])
+    _cache_invalidate("all_students_raw")
     # Also add to class attendance sheet
     _ensure_student_in_class_sheet(data["class_id"], data["reg_no"], data["name"])
 
@@ -247,6 +323,7 @@ def deactivate_student(reg_no: str) -> None:
     for i, row in enumerate(records, start=2):
         if str(row.get("RegNo", "")).strip() == reg_no.strip():
             ws.update_cell(i, status_col, "INACTIVE")
+            _cache_invalidate("all_students_raw")
             return
 
 
