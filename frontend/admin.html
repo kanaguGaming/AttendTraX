@@ -103,6 +103,9 @@
       <div class="nav-item" data-section="import">
         <span class="nav-icon">📥</span> Import Data
       </div>
+      <div class="nav-item" data-section="bulk">
+        <span class="nav-icon">📦</span> Bulk Setup
+      </div>
     </nav>
     <div class="sidebar-footer">
       <button class="logout-btn" id="logout-btn">🚪 Logout</button>
@@ -307,6 +310,134 @@
         </div>
       </section>
 
+      <!-- ═══════════ BULK SETUP ═══════════ -->
+      <section class="section" id="section-bulk">
+        <!-- Sub-tab pills -->
+        <div class="tab-pills" id="bulk-tabs">
+          <button class="tab-pill active" data-bulk-tab="bulk-students">🧑‍🎓 Import Students</button>
+          <button class="tab-pill" data-bulk-tab="bulk-faculty">👨‍🏫 Import Faculty</button>
+          <button class="tab-pill" data-bulk-tab="bulk-subjects">📚 Import Subjects</button>
+        </div>
+
+        <!-- ── STUDENTS ── -->
+        <div class="admin-tab active" id="bulk-students">
+          <div class="card" style="max-width:640px;margin:0 auto;">
+            <div class="card-header"><h3>📥 Bulk Import Students</h3></div>
+            <div class="card-body">
+              <p class="text-sm text-muted" style="margin-bottom:1rem;">
+                Upload an <strong>.xlsx</strong> file with just two columns:
+                <span class="tag">register no</span>
+                <span class="tag">student name</span>
+              </p>
+              <p class="text-xs text-muted" style="margin-bottom:1rem;">
+                Login username = student name &nbsp;|&nbsp; Password = register number &nbsp;|&nbsp; Duplicate Reg Nos are skipped.
+              </p>
+
+              <!-- Class dropdown (mandatory) -->
+              <div class="form-group" style="margin-bottom:1rem;">
+                <label class="form-label" for="bulk-students-class-sel">📚 Select Class <span style="color:#e11d48">*</span></label>
+                <select id="bulk-students-class-sel" class="form-control">
+                  <option value="">— Select a class —</option>
+                </select>
+              </div>
+
+              <div class="drop-zone" id="drop-zone-students">
+                <div class="drop-icon">📄</div>
+                <p class="font-semibold" style="margin-bottom:.25rem;">Drop your .xlsx here</p>
+                <p class="text-sm text-muted">or click to browse</p>
+                <input type="file" id="import-file-students" accept=".xlsx" style="display:none;" />
+              </div>
+              <div id="file-chosen-students" class="hidden" style="margin-top:.75rem;padding:.75rem;background:var(--brand-50);border-radius:8px;display:flex;align-items:center;gap:.5rem;">
+                <span>📄</span>
+                <span id="file-name-students" class="text-sm font-semibold"></span>
+                <button class="btn btn-sm btn-secondary" id="clear-file-students" style="margin-left:auto;">✕ Clear</button>
+              </div>
+              <div id="import-result-students" class="hidden" style="margin-top:1rem;padding:1rem;border-radius:8px;"></div>
+              <button class="btn btn-primary w-full" id="upload-btn-students" style="margin-top:1.25rem;" disabled>
+                <span id="upload-btn-text-students">📤 Upload &amp; Import Students</span>
+              </button>
+              <div style="margin-top:1.5rem;border-top:1px solid var(--gray-100);padding-top:1.25rem;">
+                <h4 style="margin-bottom:.75rem;">📋 Download Template</h4>
+                <p class="text-xs text-muted" style="margin-bottom:.75rem;">Your Excel sheet should have exactly these two column headers in row 1.</p>
+                <button class="btn btn-secondary" id="dl-template-students">⬇️ Students Template (.xlsx)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── FACULTY ── -->
+        <div class="admin-tab" id="bulk-faculty">
+          <div class="card" style="max-width:640px;margin:0 auto;">
+            <div class="card-header"><h3>📥 Bulk Import Faculty</h3></div>
+            <div class="card-body">
+              <p class="text-sm text-muted" style="margin-bottom:1rem;">
+                Upload an <strong>.xlsx</strong> file with:
+                <span class="tag">FacultyID</span>
+                <span class="tag">Name</span>
+                <span class="tag">Username</span>
+                <span class="tag">Password</span>
+              </p>
+              <p class="text-xs text-muted" style="margin-bottom:1rem;">Rows with a Username that already exists are skipped.</p>
+              <div class="drop-zone" id="drop-zone-faculty">
+                <div class="drop-icon">📄</div>
+                <p class="font-semibold" style="margin-bottom:.25rem;">Drop your .xlsx here</p>
+                <p class="text-sm text-muted">or click to browse</p>
+                <input type="file" id="import-file-faculty" accept=".xlsx" style="display:none;" />
+              </div>
+              <div id="file-chosen-faculty" class="hidden" style="margin-top:.75rem;padding:.75rem;background:var(--brand-50);border-radius:8px;display:flex;align-items:center;gap:.5rem;">
+                <span>📄</span>
+                <span id="file-name-faculty" class="text-sm font-semibold"></span>
+                <button class="btn btn-sm btn-secondary" id="clear-file-faculty" style="margin-left:auto;">✕ Clear</button>
+              </div>
+              <div id="import-result-faculty" class="hidden" style="margin-top:1rem;padding:1rem;border-radius:8px;"></div>
+              <button class="btn btn-primary w-full" id="upload-btn-faculty" style="margin-top:1.25rem;" disabled>
+                <span id="upload-btn-text-faculty">📤 Upload &amp; Import Faculty</span>
+              </button>
+              <div style="margin-top:1.5rem;border-top:1px solid var(--gray-100);padding-top:1.25rem;">
+                <h4 style="margin-bottom:.75rem;">📋 Download Template</h4>
+                <button class="btn btn-secondary" id="dl-template-faculty">⬇️ Faculty Template (.xlsx)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── SUBJECTS ── -->
+        <div class="admin-tab" id="bulk-subjects">
+          <div class="card" style="max-width:640px;margin:0 auto;">
+            <div class="card-header"><h3>📥 Bulk Import Subjects</h3></div>
+            <div class="card-body">
+              <p class="text-sm text-muted" style="margin-bottom:1rem;">
+                Upload an <strong>.xlsx</strong> file with:
+                <span class="tag">SubjectID</span>
+                <span class="tag">SubjectName</span>
+                <span class="tag">ClassID</span>
+                <span class="tag" style="opacity:.6;">FacultyID (opt)</span>
+              </p>
+              <p class="text-xs text-muted" style="margin-bottom:1rem;">ClassID must already exist in the Classes sheet.</p>
+              <div class="drop-zone" id="drop-zone-subjects">
+                <div class="drop-icon">📄</div>
+                <p class="font-semibold" style="margin-bottom:.25rem;">Drop your .xlsx here</p>
+                <p class="text-sm text-muted">or click to browse</p>
+                <input type="file" id="import-file-subjects" accept=".xlsx" style="display:none;" />
+              </div>
+              <div id="file-chosen-subjects" class="hidden" style="margin-top:.75rem;padding:.75rem;background:var(--brand-50);border-radius:8px;display:flex;align-items:center;gap:.5rem;">
+                <span>📄</span>
+                <span id="file-name-subjects" class="text-sm font-semibold"></span>
+                <button class="btn btn-sm btn-secondary" id="clear-file-subjects" style="margin-left:auto;">✕ Clear</button>
+              </div>
+              <div id="import-result-subjects" class="hidden" style="margin-top:1rem;padding:1rem;border-radius:8px;"></div>
+              <button class="btn btn-primary w-full" id="upload-btn-subjects" style="margin-top:1.25rem;" disabled>
+                <span id="upload-btn-text-subjects">📤 Upload &amp; Import Subjects</span>
+              </button>
+              <div style="margin-top:1.5rem;border-top:1px solid var(--gray-100);padding-top:1.25rem;">
+                <h4 style="margin-bottom:.75rem;">📋 Download Template</h4>
+                <button class="btn btn-secondary" id="dl-template-subjects">⬇️ Subjects Template (.xlsx)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 </div>
@@ -326,8 +457,9 @@ const sectionLoaders = {
   subjects: () => populateSubjectClassFilter(),
   reports:  () => populateReportClassFilter(),
   import:   () => {},
+  bulk:     () => populateBulkStudentsClassSel(),
 };
-const secTitles = { classes:'Classes', students:'Students', faculty:'Faculty', subjects:'Subjects', reports:'Reports', import:'Import Past Attendance' };
+const secTitles = { classes:'Classes', students:'Students', faculty:'Faculty', subjects:'Subjects', reports:'Reports', import:'Import Past Attendance', bulk:'Bulk Setup – Import from Excel' };
 
 document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', () => {
@@ -810,6 +942,219 @@ document.getElementById('download-template-btn').addEventListener('click', () =>
 
 // Initial load
 loadClasses();
+
+// ════════════════════════════════════════════════════════════════
+//  BULK SETUP – sub-tab switching
+// ════════════════════════════════════════════════════════════════
+document.querySelectorAll('[data-bulk-tab]').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('[data-bulk-tab]').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+    pill.classList.add('active');
+    document.getElementById(pill.dataset.bulkTab).classList.add('active');
+  });
+});
+
+// ── Generic upload widget wiring ─────────────────────────────────────────────
+function wireBulkUpload({ dropId, inputId, fileChosenId, fileNameId, clearBtnId,
+                          resultId, uploadBtnId, uploadBtnTextId, endpoint, templateFn }) {
+  const dropZone  = document.getElementById(dropId);
+  const fileInput = document.getElementById(inputId);
+  let currentFile = null;
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragging'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('dragging');
+    const f = e.dataTransfer.files[0];
+    if (f?.name.toLowerCase().endsWith('.xlsx')) setFile(f);
+    else showToast('Please drop a .xlsx file.', 'warning');
+  });
+  fileInput.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
+
+  function setFile(f) {
+    currentFile = f;
+    document.getElementById(fileNameId).textContent = f.name;
+    document.getElementById(fileChosenId).classList.remove('hidden');
+    document.getElementById(uploadBtnId).disabled = false;
+    document.getElementById(resultId).classList.add('hidden');
+  }
+
+  document.getElementById(clearBtnId).addEventListener('click', () => {
+    currentFile = null; fileInput.value = '';
+    document.getElementById(fileChosenId).classList.add('hidden');
+    document.getElementById(uploadBtnId).disabled = true;
+    document.getElementById(resultId).classList.add('hidden');
+  });
+
+  document.getElementById(uploadBtnId).addEventListener('click', async () => {
+    if (!currentFile) return;
+    const btn     = document.getElementById(uploadBtnId);
+    const btnText = document.getElementById(uploadBtnTextId);
+    btn.disabled  = true;
+    btnText.innerHTML = '<span class="spinner"></span> Importing…';
+    const resultEl = document.getElementById(resultId);
+    const formData = new FormData();
+    formData.append('file', currentFile);
+    try {
+      const res = await api.upload(endpoint, formData);
+      resultEl.style.cssText = 'background:#d1fae5;border:1px solid #6ee7b7;';
+      resultEl.innerHTML = `
+        <p style="color:#065f46;font-weight:700;margin-bottom:.5rem;">✅ Import Successful!</p>
+        <p class="text-sm">${res.message}</p>
+        <div class="flex gap-4" style="margin-top:.5rem;flex-wrap:wrap;">
+          <span class="badge badge-info">Inserted: ${res.inserted}</span>
+          <span class="badge badge-warning">Skipped: ${res.skipped ?? 0}</span>
+        </div>`;
+      resultEl.classList.remove('hidden');
+      showToast(res.message, 'success');
+    } catch(e) {
+      resultEl.style.cssText = 'background:#fee2e2;border:1px solid #fca5a5;';
+      resultEl.innerHTML = `<p style="color:#991b1b;font-weight:700;">❌ Import Failed</p><p class="text-sm">${e.message}</p>`;
+      resultEl.classList.remove('hidden');
+      showToast('Import failed. Check the error details.', 'error');
+    } finally {
+      btn.disabled  = false;
+      btnText.innerHTML = btnText.innerHTML.replace(/<span.*<\/span>\s*/, '');
+      btnText.textContent = uploadBtnTextId.replace('upload-btn-text-', '📤 Upload & Import ');
+    }
+  });
+
+  // Template download
+  const dlBtn = document.getElementById('dl-template-' + endpoint.split('/').pop());
+  if (dlBtn) dlBtn.addEventListener('click', templateFn);
+}
+
+// ── Populate class dropdown for bulk student import ─────────────────────────
+async function populateBulkStudentsClassSel() {
+  const sel = document.getElementById('bulk-students-class-sel');
+  if (sel.options.length > 1) return;   // already populated
+  const classes = allClasses.length ? allClasses : await api.get('/admin/classes').catch(() => []);
+  classes.filter(c => c.Status === 'ACTIVE').forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.ClassID;
+    o.textContent = c.ClassName;
+    sel.appendChild(o);
+  });
+}
+
+// ── Wire each bulk tab ───────────────────────────────────────────────────────
+// Students – custom wiring because we need to send class_id as a form field
+(function wireStudentsBulkUpload() {
+  const dropZoneEl  = document.getElementById('drop-zone-students');
+  const fileInputEl = document.getElementById('import-file-students');
+  let   currentFile = null;
+
+  dropZoneEl.addEventListener('click', () => fileInputEl.click());
+  dropZoneEl.addEventListener('dragover', e => { e.preventDefault(); dropZoneEl.classList.add('dragging'); });
+  dropZoneEl.addEventListener('dragleave', () => dropZoneEl.classList.remove('dragging'));
+  dropZoneEl.addEventListener('drop', e => {
+    e.preventDefault(); dropZoneEl.classList.remove('dragging');
+    const f = e.dataTransfer.files[0];
+    if (f?.name.toLowerCase().endsWith('.xlsx')) setStudentFile(f);
+    else showToast('Please drop a .xlsx file.', 'warning');
+  });
+  fileInputEl.addEventListener('change', e => { if (e.target.files[0]) setStudentFile(e.target.files[0]); });
+
+  function setStudentFile(f) {
+    currentFile = f;
+    document.getElementById('file-name-students').textContent = f.name;
+    document.getElementById('file-chosen-students').classList.remove('hidden');
+    document.getElementById('upload-btn-students').disabled = false;
+    document.getElementById('import-result-students').classList.add('hidden');
+  }
+
+  document.getElementById('clear-file-students').addEventListener('click', () => {
+    currentFile = null; fileInputEl.value = '';
+    document.getElementById('file-chosen-students').classList.add('hidden');
+    document.getElementById('upload-btn-students').disabled = true;
+    document.getElementById('import-result-students').classList.add('hidden');
+  });
+
+  document.getElementById('upload-btn-students').addEventListener('click', async () => {
+    if (!currentFile) return;
+    const classId = document.getElementById('bulk-students-class-sel').value;
+    if (!classId) { showToast('Please select a class before uploading.', 'warning'); return; }
+
+    const btn     = document.getElementById('upload-btn-students');
+    const btnText = document.getElementById('upload-btn-text-students');
+    btn.disabled  = true;
+    btnText.innerHTML = '<span class="spinner"></span> Importing…';
+    const resultEl = document.getElementById('import-result-students');
+
+    const formData = new FormData();
+    formData.append('file', currentFile);
+    formData.append('class_id', classId);
+
+    try {
+      const res = await api.upload('/admin/import/students', formData);
+      resultEl.style.cssText = 'background:#d1fae5;border:1px solid #6ee7b7;';
+      resultEl.innerHTML = `
+        <p style="color:#065f46;font-weight:700;margin-bottom:.5rem;">✅ Import Successful!</p>
+        <p class="text-sm">${res.message}</p>
+        <div class="flex gap-4" style="margin-top:.5rem;flex-wrap:wrap;">
+          <span class="badge badge-info">Inserted: ${res.inserted}</span>
+          <span class="badge badge-warning">Skipped (existing): ${res.skipped ?? 0}</span>
+          <span class="badge badge-info">Class: ${res.class}</span>
+        </div>`;
+      resultEl.classList.remove('hidden');
+      showToast(res.message, 'success');
+    } catch (e) {
+      resultEl.style.cssText = 'background:#fee2e2;border:1px solid #fca5a5;';
+      resultEl.innerHTML = `<p style="color:#991b1b;font-weight:700;">❌ Import Failed</p><p class="text-sm">${e.message}</p>`;
+      resultEl.classList.remove('hidden');
+      showToast('Import failed. Check error details.', 'error');
+    } finally {
+      btn.disabled = false;
+      btnText.textContent = '📤 Upload & Import Students';
+    }
+  });
+
+  // Template download – simple 2-column format matching user's actual Excel
+  document.getElementById('dl-template-students').addEventListener('click', () => {
+    downloadCsvTemplate(
+      'students_import_template.csv',
+      'register no,student name\n23CS001,Arjun Kumar\n23CS002,Priya Sharma\n23CS003,Karthik Rajan\n',
+      'Open in Excel → fill your data → Save As → Excel Workbook (.xlsx) before uploading.'
+    );
+  });
+})();
+
+wireBulkUpload({
+  dropId: 'drop-zone-faculty', inputId: 'import-file-faculty',
+  fileChosenId: 'file-chosen-faculty', fileNameId: 'file-name-faculty',
+  clearBtnId: 'clear-file-faculty', resultId: 'import-result-faculty',
+  uploadBtnId: 'upload-btn-faculty', uploadBtnTextId: 'upload-btn-text-faculty',
+  endpoint: '/admin/import/faculty',
+  templateFn: () => downloadCsvTemplate(
+    'faculty_import_template.csv',
+    'FacultyID,Name,Username,Password\nFAC001,Dr. Ramesh Babu,ramesh.babu,Pass@123\nFAC002,Prof. Kavitha,kavitha.r,Pass@456\n',
+    'Fill in your faculty details and save as .xlsx.'
+  ),
+});
+
+wireBulkUpload({
+  dropId: 'drop-zone-subjects', inputId: 'import-file-subjects',
+  fileChosenId: 'file-chosen-subjects', fileNameId: 'file-name-subjects',
+  clearBtnId: 'clear-file-subjects', resultId: 'import-result-subjects',
+  uploadBtnId: 'upload-btn-subjects', uploadBtnTextId: 'upload-btn-text-subjects',
+  endpoint: '/admin/import/subjects',
+  templateFn: () => downloadCsvTemplate(
+    'subjects_import_template.csv',
+    'SubjectID,SubjectName,ClassID,FacultyID\nCS301,Data Structures,CSE3A,FAC001\nCS302,Computer Networks,CSE3A,FAC002\n',
+    'ClassID must match an existing class. FacultyID is optional.'
+  ),
+});
+
+function downloadCsvTemplate(filename, csvContent, toastMsg) {
+  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+  showToast(toastMsg, 'info', 6000);
+}
 </script>
 </body>
 </html>
